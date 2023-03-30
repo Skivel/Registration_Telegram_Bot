@@ -9,10 +9,13 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
 
+
 logging.basicConfig(level=logging.INFO)
+
 
 BOT_TOKEN = settings.BOT_TOKEN
 SITE_URL = settings.SITE_URL
+TELEGRAM_USER_INFO = []
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -20,7 +23,6 @@ dp = Dispatcher(bot, storage=storage)
 
 
 class UserForm(StatesGroup):
-    name = State()
     email = State()
     password = State()
 
@@ -30,27 +32,26 @@ async def start_command(message: types.Message):
     """
     Логіка при отриманні команди /start
     """
-    await message.answer("Введіть своє ім'я:")
-    await UserForm.name.set()
 
+    # Отримуємо данні про користувачя
+    TELEGRAM_USER_INFO.append(message.from_user.full_name)
+    TELEGRAM_USER_INFO.append(message.from_user.username)
+    user_photo = await message.from_user.get_profile_photos(limit=1)
 
-@dp.message_handler(state=UserForm.name)
-async def process_name(message: types.Message, state: FSMContext):
-    """
-    Логіка при введенні імені користувачем
-    """
+    await message.answer(f"Привіт, {TELEGRAM_USER_INFO[0]}! \nВведіть свій E-mail:")
 
-    # Перевірка імені користувачя
-    if not re.match("^[a-zA-Z]{3,20}$", message.text):
-        await message.answer("🛑 Помилка 🛑 Ім'я не вірне!")
-        await message.answer("Повторіть спробу:")
-        return False
+    # Якщо користувач має хоч одне фото
+    if user_photo.total_count > 0:
+        # Отримуємо file id перщої фотографії профілю
+        file_id = user_photo.photos[0][-1].file_id
 
-    async with state.proxy() as data:
-        data['name'] = message.text
+        # Завантажуємо фото профілю
+        photo = await bot.get_file(file_id)
 
-    await message.reply(f"Привіт, {message.text}! Введіть свій E-mail:")
-    await UserForm.next()
+        # Зберігаємо у директорії для подальших операцій
+        await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO[1]}')
+
+    await UserForm.email.set()
 
 
 @dp.message_handler(state=UserForm.email)
@@ -107,7 +108,7 @@ async def process_password(message: types.Message, state: FSMContext):
         data['password'] = message.text
 
     await message.answer(
-        f"Вітаю, {data.get('name')}!\nВи успішно зареєструвались ✅\nМожете спробувати увійти у свій профіль за посиланням👇\n{SITE_URL}")
+        f"Вітаю, {TELEGRAM_USER_INFO[0]}!\nВи успішно зареєструвались ✅\nМожете спробувати увійти у свій профіль використовуючи email або ж нік телеграму за посиланням👇\n{SITE_URL}")
     await state.finish()
 
 
