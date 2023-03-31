@@ -14,8 +14,10 @@ from aiogram.utils import executor
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = settings.BOT_TOKEN
-SITE_URL = settings.SITE_URL + 'user/create'
+CREATE_USER_URL = settings.SITE_URL + 'user/create'
+SITE_URL = settings.SITE_URL
 TELEGRAM_USER_INFO = {}
+USER_PHOTO_PATH = ''
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -50,6 +52,10 @@ async def start_command(message: types.Message):
 
         # Зберігаємо у директорії для подальших операцій
         await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get("nickname")}')
+        global USER_PHOTO_PATH
+        USER_PHOTO_PATH = f'media/users/{TELEGRAM_USER_INFO.get("nickname")}/{photo.file_path}'
+    else:
+        USER_PHOTO_PATH = ''
 
     await UserForm.email.set()
 
@@ -107,11 +113,20 @@ async def process_password(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"Вітаю, {TELEGRAM_USER_INFO.get('name')}!\nВи успішно зареєструвались ✅ \nМожете спробувати увійти у свій "
-        f"профіль за посиланням👇 \n{settings.SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get('nickname')}\nPassword: "
+        f"профіль за посиланням👇 \n{SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get('nickname')}\nPassword: "
         f"{TELEGRAM_USER_INFO.get('password')}")
+    if USER_PHOTO_PATH == '':
+        response = requests.post(CREATE_USER_URL, data=json.dumps(TELEGRAM_USER_INFO),
+                                 headers={'Content-Type': 'application/json'})
+    else:
+        headers = {'Content-Type': 'application/json'}
+        data = json.dumps(TELEGRAM_USER_INFO)
+        print(f'TEST {data}')
+        files = {'image': open(USER_PHOTO_PATH, 'rb')}
+        response = requests.post(CREATE_USER_URL, data=json.loads(data), files=files)
+        print(response.status_code)
+        print(response.json)
 
-    response = requests.post(SITE_URL, data=json.dumps(TELEGRAM_USER_INFO),
-                             headers={'Content-Type': 'application/json'})
     await state.finish()
     return response.status_code
 
