@@ -1,5 +1,7 @@
 import logging
 import re
+import requests
+import json
 
 import settings
 
@@ -9,13 +11,11 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
 
-
 logging.basicConfig(level=logging.INFO)
 
-
 BOT_TOKEN = settings.BOT_TOKEN
-SITE_URL = settings.SITE_URL
-TELEGRAM_USER_INFO = []
+SITE_URL = settings.SITE_URL + 'user/create'
+TELEGRAM_USER_INFO = {}
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -34,11 +34,11 @@ async def start_command(message: types.Message):
     """
 
     # Отримуємо данні про користувачя
-    TELEGRAM_USER_INFO.append(message.from_user.full_name)
-    TELEGRAM_USER_INFO.append(message.from_user.username)
+    TELEGRAM_USER_INFO.update({'name': message.from_user.full_name})
+    TELEGRAM_USER_INFO.update({'nickname': message.from_user.username})
     user_photo = await message.from_user.get_profile_photos(limit=1)
 
-    await message.answer(f"Привіт, {TELEGRAM_USER_INFO[0]}! \nВведіть свій E-mail:")
+    await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}! \nВведіть свій E-mail:")
 
     # Якщо користувач має хоч одне фото
     if user_photo.total_count > 0:
@@ -49,7 +49,7 @@ async def start_command(message: types.Message):
         photo = await bot.get_file(file_id)
 
         # Зберігаємо у директорії для подальших операцій
-        await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO[1]}')
+        await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get("nickname")}')
 
     await UserForm.email.set()
 
@@ -66,8 +66,7 @@ async def process_email(message: types.Message, state: FSMContext):
     if not re.match(pattern, message.text):
         return False
 
-    async with state.proxy() as data:
-        data['email'] = message.text
+    TELEGRAM_USER_INFO.update({'email': message.text})
 
     await message.answer("Тепер введіть пароль:")
     await UserForm.next()
@@ -104,12 +103,17 @@ async def process_password(message: types.Message, state: FSMContext):
         await message.answer("Повторіть спробу")
         return False
 
-    async with state.proxy() as data:
-        data['password'] = message.text
+    TELEGRAM_USER_INFO.update({'password': message.text})
 
     await message.answer(
-        f"Вітаю, {TELEGRAM_USER_INFO[0]}!\nВи успішно зареєструвались ✅\nМожете спробувати увійти у свій профіль використовуючи email або ж нік телеграму за посиланням👇\n{SITE_URL}")
+        f"Вітаю, {TELEGRAM_USER_INFO.get('name')}!\nВи успішно зареєструвались ✅ \nМожете спробувати увійти у свій "
+        f"профіль за посиланням👇 \n{settings.SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get('nickname')}\nPassword: "
+        f"{TELEGRAM_USER_INFO.get('password')}")
+
+    response = requests.post(SITE_URL, data=json.dumps(TELEGRAM_USER_INFO),
+                             headers={'Content-Type': 'application/json'})
     await state.finish()
+    return response.status_code
 
 
 if __name__ == '__main__':
