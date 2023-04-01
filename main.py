@@ -35,29 +35,40 @@ async def start_command(message: types.Message):
     Логіка при отриманні команди /start
     """
 
+    # Отримуємо список зареєстрованих користувачів
+    response = requests.get(f"{SITE_URL}api/v1/users")
+    data = json.loads(response.text)
+    print("test", data)
+    register_users = [item['user_nickname'] for item in data]
+    print(register_users)
+
     # Отримуємо данні про користувачя
     TELEGRAM_USER_INFO.update({'name': message.from_user.full_name})
     TELEGRAM_USER_INFO.update({'nickname': message.from_user.username})
     user_photo = await message.from_user.get_profile_photos(limit=1)
 
-    await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}! \nВведіть свій E-mail:")
-
-    # Якщо користувач має хоч одне фото
-    if user_photo.total_count > 0:
-        # Отримуємо file id перщої фотографії профілю
-        file_id = user_photo.photos[0][-1].file_id
-
-        # Завантажуємо фото профілю
-        photo = await bot.get_file(file_id)
-
-        # Зберігаємо у директорії для подальших операцій
-        await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get("nickname")}')
-        global USER_PHOTO_PATH
-        USER_PHOTO_PATH = f'media/users/{TELEGRAM_USER_INFO.get("nickname")}/{photo.file_path}'
+    if TELEGRAM_USER_INFO.get('nickname') in register_users:
+        await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}\nВи вже зареєстровані!"
+                             f"\nУвійдіть у свій профіль за посиланням👇\n{SITE_URL}")
     else:
-        USER_PHOTO_PATH = ''
+        await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}! \nВведіть свій E-mail:")
 
-    await UserForm.email.set()
+        # Якщо користувач має хоч одне фото
+        if user_photo.total_count > 0:
+            # Отримуємо file id перщої фотографії профілю
+            file_id = user_photo.photos[0][-1].file_id
+
+            # Завантажуємо фото профілю
+            photo = await bot.get_file(file_id)
+
+            # Зберігаємо у директорії для подальших операцій
+            await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get("nickname")}')
+            global USER_PHOTO_PATH
+            USER_PHOTO_PATH = f'media/users/{TELEGRAM_USER_INFO.get("nickname")}/{photo.file_path}'
+        else:
+            USER_PHOTO_PATH = ''
+
+        await UserForm.email.set()
 
 
 @dp.message_handler(state=UserForm.email)
@@ -115,13 +126,12 @@ async def process_password(message: types.Message, state: FSMContext):
         f"Вітаю, {TELEGRAM_USER_INFO.get('name')}!\nВи успішно зареєструвались ✅ \nМожете спробувати увійти у свій "
         f"профіль за посиланням👇 \n{SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get('nickname')}\nPassword: "
         f"{TELEGRAM_USER_INFO.get('password')}")
+
+    data = json.dumps(TELEGRAM_USER_INFO)
+
     if USER_PHOTO_PATH == '':
-        response = requests.post(CREATE_USER_URL, data=json.dumps(TELEGRAM_USER_INFO),
-                                 headers={'Content-Type': 'application/json'})
+        response = requests.post(CREATE_USER_URL, data=json.loads(data))
     else:
-        headers = {'Content-Type': 'application/json'}
-        data = json.dumps(TELEGRAM_USER_INFO)
-        print(f'TEST {data}')
         files = {'image': open(USER_PHOTO_PATH, 'rb')}
         response = requests.post(CREATE_USER_URL, data=json.loads(data), files=files)
         print(response.status_code)
