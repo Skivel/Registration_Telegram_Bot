@@ -38,9 +38,7 @@ async def start_command(message: types.Message):
     # Отримуємо список зареєстрованих користувачів
     response = requests.get(f"{SITE_URL}api/v1/users")
     data = json.loads(response.text)
-    print("test", data)
     register_users = [item['user_nickname'] for item in data]
-    print(register_users)
 
     # Отримуємо данні про користувачя
     TELEGRAM_USER_INFO.update({'name': message.from_user.full_name})
@@ -55,7 +53,7 @@ async def start_command(message: types.Message):
 
         # Якщо користувач має хоч одне фото
         if user_photo.total_count > 0:
-            # Отримуємо file id перщої фотографії профілю
+            # Отримуємо file id першої фотографії профілю
             file_id = user_photo.photos[0][-1].file_id
 
             # Завантажуємо фото профілю
@@ -72,7 +70,7 @@ async def start_command(message: types.Message):
 
 
 @dp.message_handler(state=UserForm.email)
-async def process_email(message: types.Message, state: FSMContext):
+async def process_email(message: types.Message):
     """
     Логіка при введенні e-mail користувачем
     """
@@ -81,6 +79,7 @@ async def process_email(message: types.Message, state: FSMContext):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     # Перевірка чи відповідає введена електронна пошта регулярному виразу
     if not re.match(pattern, message.text):
+        await message.answer("Email не коректний, повторіть спробу:")
         return False
 
     TELEGRAM_USER_INFO.update({'email': message.text})
@@ -96,8 +95,8 @@ async def process_password(message: types.Message, state: FSMContext):
     """
 
     # Перевірка на мінімальну довжину
-    if len(message.text) < 8:
-        await message.answer("🛑 Небезпека 🛑 Пароль повинен містити більше 8-ми символів")
+    if len(message.text) < 8 or len(message.text) > 30:
+        await message.answer("🛑 Небезпека 🛑 Пароль повинен містити від 8-ми до 30-ти символів")
         await message.answer("Повторіть спробу")
         return False
 
@@ -135,7 +134,6 @@ async def process_password(message: types.Message, state: FSMContext):
         files = {'image': open(USER_PHOTO_PATH, 'rb')}
         response = requests.post(CREATE_USER_URL, data=json.loads(data), files=files)
         print(response.status_code)
-        print(response.json)
 
     await state.finish()
     return response.status_code
