@@ -41,15 +41,18 @@ async def start_command(message: types.Message):
     register_users = [item['user_nickname'] for item in data]
 
     # Отримуємо данні про користувачя
-    TELEGRAM_USER_INFO.update({'name': message.from_user.full_name})
-    TELEGRAM_USER_INFO.update({'nickname': message.from_user.username})
+    TELEGRAM_USER_INFO.update({f'{message.from_user.id}': {}})
+    TELEGRAM_USER_INFO[f'{message.from_user.id}']['name'] = message.from_user.full_name
+    TELEGRAM_USER_INFO[f'{message.from_user.id}']['nickname'] = message.from_user.username
     user_photo = await message.from_user.get_profile_photos(limit=1)
 
-    if TELEGRAM_USER_INFO.get('nickname') in register_users:
-        await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}\nВи вже зареєстровані!"
-                             f"\nУвійдіть у свій профіль за посиланням👇\n{SITE_URL}")
+    if TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('nickname') in register_users:
+        await message.answer(
+            f"Привіт, {TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('name')}\nВи вже зареєстровані!"
+            f"\nУвійдіть у свій профіль за посиланням👇\n{SITE_URL}")
     else:
-        await message.answer(f"Привіт, {TELEGRAM_USER_INFO.get('name')}! \nВведіть свій E-mail:")
+        await message.answer(
+            f"Привіт, {TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('name')}! \nВведіть свій E-mail:")
 
         # Якщо користувач має хоч одне фото
         if user_photo.total_count > 0:
@@ -60,13 +63,15 @@ async def start_command(message: types.Message):
             photo = await bot.get_file(file_id)
 
             # Зберігаємо у директорії для подальших операцій
-            await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get("nickname")}')
+            await photo.download(destination_dir=f'media/users/{TELEGRAM_USER_INFO.get(f"{message.from_user.id}").get("nickname")}')
             global USER_PHOTO_PATH
-            USER_PHOTO_PATH = f'media/users/{TELEGRAM_USER_INFO.get("nickname")}/{photo.file_path}'
+            USER_PHOTO_PATH = f'media/users/{TELEGRAM_USER_INFO.get(f"{message.from_user.id}").get("nickname")}/{photo.file_path}'
         else:
             USER_PHOTO_PATH = ''
 
         await UserForm.email.set()
+
+    print(TELEGRAM_USER_INFO)
 
 
 @dp.message_handler(state=UserForm.email)
@@ -82,7 +87,7 @@ async def process_email(message: types.Message):
         await message.answer("Email не коректний, повторіть спробу:")
         return False
 
-    TELEGRAM_USER_INFO.update({'email': message.text})
+    TELEGRAM_USER_INFO[f'{message.from_user.id}']['email'] = message.text
 
     await message.answer("Тепер введіть пароль:")
     await UserForm.next()
@@ -119,14 +124,14 @@ async def process_password(message: types.Message, state: FSMContext):
         await message.answer("Повторіть спробу")
         return False
 
-    TELEGRAM_USER_INFO.update({'password': message.text})
+    TELEGRAM_USER_INFO[f'{message.from_user.id}']['password'] = message.text
 
     await message.answer(
-        f"Вітаю, {TELEGRAM_USER_INFO.get('name')}!\nВи успішно зареєструвались ✅ \nМожете спробувати увійти у свій "
-        f"профіль за посиланням👇 \n{SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get('nickname')}\nPassword: "
-        f"{TELEGRAM_USER_INFO.get('password')}")
+        f"Вітаю, {TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('name')}!\nВи успішно зареєструвались ✅ \nМожете спробувати увійти у свій "
+        f"профіль за посиланням👇 \n{SITE_URL}\nLogin: {TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('nickname')}\nPassword: "
+        f"{TELEGRAM_USER_INFO.get(f'{message.from_user.id}').get('password')}")
 
-    data = json.dumps(TELEGRAM_USER_INFO)
+    data = json.dumps(TELEGRAM_USER_INFO.get(f'{message.from_user.id}'))
 
     if USER_PHOTO_PATH == '':
         response = requests.post(CREATE_USER_URL, data=json.loads(data))
@@ -136,6 +141,8 @@ async def process_password(message: types.Message, state: FSMContext):
         print(response.status_code)
 
     await state.finish()
+    TELEGRAM_USER_INFO.pop(f'{message.from_user.id}')
+    print(TELEGRAM_USER_INFO)
     return response.status_code
 
 
